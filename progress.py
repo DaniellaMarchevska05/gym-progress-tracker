@@ -151,16 +151,15 @@ if menu_option == "Log Workout":
     if "workout_date" not in st.session_state:
         st.session_state.workout_date = datetime.now().date()
 
-    date = st.date_input("Workout Date", value=st.session_state.workout_date, min_value=datetime(2000, 1, 1), max_value=datetime.now())
+    date = st.date_input("Workout Date", value=None, min_value=datetime(2000, 1, 1), max_value=datetime.now())
 
-    if st.button("Log Exercise"):
-        if st.session_state.workout_id is None:
-            date_str = date.strftime("%Y-%m-%d")  # Ensure proper format
-            st.session_state.workout_id = add_workout_to_db(date_str)
-            st.success(f"Workout logged for {date_str}")
-            st.session_state.workout_date = date  # Update the date stored in session state
-        else:
-            st.warning("Workout already logged for today. Press 'Log Workout' to change the date.")
+    if not date:
+        st.warning("Select the date before logging your workout")
+    elif st.session_state.workout_id is None:
+        date_str = date.strftime("%Y-%m-%d")  # Ensure proper format
+        st.session_state.workout_id = add_workout_to_db(date_str)
+        st.success(f"Workout logged for {date_str}")
+
 
     exercise_name = st.text_input("Exercise Name", placeholder="Enter exercise name")
 
@@ -186,12 +185,17 @@ if menu_option == "Log Workout":
 
     # Finish Exercise Button
     if st.button("Finish Exercise"):
-        if "exercise_id" in st.session_state:
-            del st.session_state.exercise_id
-        if "current_sets" in st.session_state:
-            del st.session_state.current_sets
-        st.session_state.workout_id = None  # Clear workout_id to log a new workout
-        st.success("Exercise finished!")
+        if not st.session_state.current_sets:  # Check if no sets have been added
+            st.warning("Add at least one set to the current exercise before finishing it.")
+        else:
+            st.session_state.workout_date = date  # Update the date stored in session state
+            if "exercise_id" in st.session_state:
+                del st.session_state.exercise_id
+            if "current_sets" in st.session_state:
+                del st.session_state.current_sets
+            st.session_state.workout_id = None  # Clear workout_id to log a new workout
+            st.success("Exercise finished!")
+
 
 
 elif menu_option == "My Workouts":
