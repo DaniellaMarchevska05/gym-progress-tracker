@@ -251,4 +251,48 @@ elif menu_option == "View Progress":
             start_date = today - pd.DateOffset(years=1)
 
         filtered_df = df[df["Date"] >= start_date]
+        if not filtered_df.empty:
+            if analysis_type == "Exercise Trends":
+                # Group and aggregate data for analysis
+                grouped = filtered_df.groupby(["Date", "Exercise"]).agg({"Weight": "mean", "Reps": "mean"}).reset_index()
 
+                st.write("Progress Data Summary:")
+                st.dataframe(grouped)
+
+                # Plot progress for each exercise
+                for exercise in grouped["Exercise"].unique():
+                    exercise_data = grouped[grouped["Exercise"] == exercise]
+
+                    st.write(f"**Progress for {exercise}:**")
+
+                    # Plot with matplotlib
+                    plt.figure(figsize=(10, 5))
+                    plt.plot(exercise_data["Date"], exercise_data["Weight"], marker='o', label="Weight (kg)")
+                    plt.plot(exercise_data["Date"], exercise_data["Reps"], marker='s', label="Reps")
+                    plt.title(f"{exercise} Progress Over Time")
+                    plt.xlabel("Date")
+                    plt.ylabel("Weight / Reps")
+                    plt.legend()
+                    plt.grid(True)
+                    st.pyplot(plt)
+
+            elif analysis_type == "Weight Summary":
+                # Calculate total weight lifted per month
+                weight_summary = get_total_weight_summary(filtered_df)
+
+                st.write("Weight Summary Data:")
+                st.dataframe(weight_summary)
+
+                # Plot total weight lifted
+                plt.figure(figsize=(10, 5))
+                plt.bar(weight_summary["Date"].dt.strftime("%B %Y"), weight_summary["TotalWeight"], color="skyblue")
+                plt.title("Total Weight Lifted Over Time")
+                plt.xlabel("Month")
+                plt.ylabel("Total Weight Lifted (kg)")
+                plt.grid(axis="y")
+                st.pyplot(plt)
+
+        else:
+            st.warning(f"No data available for the selected period ({analysis_period}).")
+    else:
+        st.warning("No workout data found.")
