@@ -1,6 +1,8 @@
 import mysql.connector
 import streamlit as st
 from datetime import datetime
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 # Database setup
@@ -107,6 +109,26 @@ def get_workout_by_date(date):
     connection.close()
     return results
 
+def get_progress_data():
+    connection = make_connection_db()
+    c = connection.cursor()
+    c.execute(
+        '''
+        SELECT Workout.date, Exercise.name, SetRecord.weight, SetRecord.reps
+        FROM Workout
+        JOIN SetRecord ON Workout.id = SetRecord.workout_id
+        JOIN Exercise ON SetRecord.exercise_id = Exercise.id
+        ORDER BY Workout.date
+        '''
+    )
+    results = c.fetchall()
+    c.close()
+    connection.close()
+    return results
+
+def get_total_weight_summary(df):
+    df["TotalWeight"] = df["Weight"] * df["Reps"]  # Calculate total weight for each set
+    return df.groupby(pd.Grouper(key="Date", freq="M"))["TotalWeight"].sum().reset_index()
 
 # Initialize database
 init_db()
@@ -114,7 +136,7 @@ init_db()
 # Streamlit Interface
 st.title("Gym Progress Tracker")
 st.sidebar.title("Menu")
-menu_option = st.sidebar.radio("Menu", ["Log Workout", "View Progress"])
+menu_option = st.sidebar.radio("Choose one of the options", ["Log Workout", "My Workouts", "View Progress"])
 
 if "current_sets" not in st.session_state:
     st.session_state.current_sets = []
@@ -126,9 +148,19 @@ if menu_option == "Log Workout":
     st.subheader("Log Your Workout")
 
     # Input: Workout Date
-    date = st.date_input("Workout Date", min_value=datetime(2000, 1, 1), max_value=datetime.now())
-    if date and st.session_state.workout_id is None:
-        st.session_state.workout_id = add_workout_to_db(date)
+    if "workout_date" not in st.session_state:
+        st.session_state.workout_date = datetime.now().date()
+
+    date = st.date_input("Workout Date", value=st.session_state.workout_date, min_value=datetime(2000, 1, 1), max_value=datetime.now())
+
+    if st.button("Log Exercise"):
+        if st.session_state.workout_id is None:
+            date_str = date.strftime("%Y-%m-%d")  # Ensure proper format
+            st.session_state.workout_id = add_workout_to_db(date_str)
+            st.success(f"Workout logged for {date_str}")
+            st.session_state.workout_date = date  # Update the date stored in session state
+        else:
+            st.warning("Workout already logged for today. Press 'Log Workout' to change the date.")
 
     exercise_name = st.text_input("Exercise Name", placeholder="Enter exercise name")
 
@@ -137,37 +169,36 @@ if menu_option == "Log Workout":
             exercise_id = add_exercise_to_db(exercise_name)
             st.session_state.exercise_id = exercise_id
 
-        st.subheader(f"Log Sets for '{exercise_name}'")
+    st.subheader(f"Log Sets for '{exercise_name}'")
 
-        # Inputs for weight and reps
-        weight = st.number_input("Weight (kg)", min_value=0.0, step=0.5, value=0.0, key="weight_input")
-        reps = st.number_input("Reps", min_value=1, step=1, value=1, key="reps_input")
+    # Inputs for weight and reps
+    weight = st.number_input("Weight (kg)", min_value=0.0, step=0.5, value=0.0, key="weight_input")
+    reps = st.number_input("Reps", min_value=1, step=1, value=1, key="reps_input")
 
-        if st.button("Add Set"):
-            new_set = {"weight": weight, "reps": reps}
-            st.session_state.current_sets.append(new_set)
-            add_set_to_db(st.session_state.workout_id, st.session_state.exercise_id, weight, reps)
+    if st.button("Add Set"):
+        new_set = {"weight": weight, "reps": reps}
+        st.session_state.current_sets.append(new_set)
+        add_set_to_db(st.session_state.workout_id, st.session_state.exercise_id, weight, reps)
 
-        st.subheader("Current Sets")
-        for i, set_data in enumerate(st.session_state.current_sets, start=1):
-            st.write(f"Set {i}: {set_data['weight']} kg x {set_data['reps']} reps")
+    st.subheader("Current Sets")
+    for i, set_data in enumerate(st.session_state.current_sets, start=1):
+        st.write(f"Set {i}: {set_data['weight']} kg x {set_data['reps']} reps")
 
-        # Finish Exercise Button
-        if st.button("Finish Exercise"):
-            if "exercise_id" in st.session_state:
-                del st.session_state.exercise_id
-            if "current_sets" in st.session_state:
-                del st.session_state.current_sets
-            st.success("Exercise finished!")
+    # Finish Exercise Button
+    if st.button("Finish Exercise"):
+        if "exercise_id" in st.session_state:
+            del st.session_state.exercise_id
+        if "current_sets" in st.session_state:
+            del st.session_state.current_sets
+        st.session_state.workout_id = None  # Clear workout_id to log a new workout
+        st.success("Exercise finished!")
 
-    else:
-        st.info("Start logging by adding an exercise name.")
 
-elif menu_option == "View Progress":
-    st.subheader("View Progress")
+elif menu_option == "My Workouts":
+    st.subheader("My Workouts")
 
     # Select Date
-    selected_date = st.date_input("Select Date to View Progress", min_value=datetime(2000, 1, 1), max_value=datetime.now())
+    selected_date = st.date_input("Select Date to View Your Workout", min_value=datetime(2000, 1, 1), max_value=datetime.now())
 
     if st.button("View Progress for Selected Date"):
         progress = get_workout_by_date(selected_date)
@@ -189,3 +220,31 @@ elif menu_option == "View Progress":
 
         else:
             st.warning("No progress found for the selected date.")
+
+elif menu_option == "View Progress":
+    st.subheader("Analyze Your Workout Progress")
+
+    # Fetch data
+    progress_data = get_progress_data()
+    if progress_data:
+        # Convert data to a DataFrame
+        df = pd.DataFrame(progress_data, columns=["Date", "Exercise", "Weight", "Reps"])
+        df["Date"] = pd.to_datetime(df["Date"])
+
+        # Choose analysis type
+        analysis_type = st.radio("Choose analysis type", ["Exercise Trends", "Weight Summary"])
+
+        # Select analysis period
+        analysis_period = st.radio("Select analysis period", ["1 Month", "6 Months", "1 Year"])
+
+        # Filter data based on period
+        today = datetime.now()
+        if analysis_period == "1 Month":
+            start_date = today - pd.DateOffset(months=1)
+        elif analysis_period == "6 Months":
+            start_date = today - pd.DateOffset(months=6)
+        elif analysis_period == "1 Year":
+            start_date = today - pd.DateOffset(years=1)
+
+        filtered_df = df[df["Date"] >= start_date]
+
