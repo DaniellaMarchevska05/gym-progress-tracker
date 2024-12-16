@@ -221,7 +221,7 @@ elif menu_option == "My Workouts":
                 st.write(f"Exercise: {exercise_name}")
                 for i, (weight, reps) in enumerate(sets, start=1):
                     st.write(f"  - Set {i}: {weight} kg x {reps} reps")
-
+                st.markdown("---")
         else:
             st.warning("No progress found for the selected date.")
 
@@ -253,28 +253,56 @@ elif menu_option == "View Progress":
         filtered_df = df[df["Date"] >= start_date]
         if not filtered_df.empty:
             if analysis_type == "Exercise Trends":
-                # Group and aggregate data for analysis
-                grouped = filtered_df.groupby(["Date", "Exercise"]).agg({"Weight": "mean", "Reps": "mean"}).reset_index()
+                # Get a list of unique exercises from the filtered data
+                exercise_list = filtered_df["Exercise"].unique()
 
-                st.write("Progress Data Summary:")
-                st.dataframe(grouped)
+                # Add a multiselect widget for exercise selection
+                selected_exercises = st.multiselect(
+                    "Select Exercises to Analyze",
+                    options=exercise_list,
+                    default=exercise_list  # Default to all exercises
+                )
 
-                # Plot progress for each exercise
-                for exercise in grouped["Exercise"].unique():
-                    exercise_data = grouped[grouped["Exercise"] == exercise]
+                # Filter data based on selected exercises
+                filtered_exercises_df = filtered_df[filtered_df["Exercise"].isin(selected_exercises)]
 
-                    st.write(f"**Progress for {exercise}:**")
+                if not filtered_exercises_df.empty:
+                    # Group and aggregate data for analysis
+                    grouped = filtered_exercises_df.groupby(["Date", "Exercise"]).agg(
+                        {"Weight": "sum", "Reps": "sum"}).reset_index()
 
-                    # Plot with matplotlib
-                    plt.figure(figsize=(10, 5))
-                    plt.plot(exercise_data["Date"], exercise_data["Weight"], marker='o', label="Weight (kg)")
-                    plt.plot(exercise_data["Date"], exercise_data["Reps"], marker='s', label="Reps")
-                    plt.title(f"{exercise} Progress Over Time")
-                    plt.xlabel("Date")
-                    plt.ylabel("Weight / Reps")
-                    plt.legend()
-                    plt.grid(True)
-                    st.pyplot(plt)
+                    st.write("Progress Data Summary (Filtered):")
+                    st.dataframe(grouped)
+
+                    # Plot progress for each selected exercise
+                    for exercise in grouped["Exercise"].unique():
+                        exercise_data = grouped[grouped["Exercise"] == exercise]
+
+                        st.write(f"**Progress for {exercise}:**")
+
+                        # Specify date format and colors
+                        date_format = "%d.%m.%y"  # Change to desired format: "%m/%d/%Y", "%Y-%m-%d", etc.
+                        weight_color = "hotpink"  # Change to desired color
+                        reps_color = "black"  # Change to desired color
+
+                        # Plot with custom date format and colors
+                        plt.figure(figsize=(10, 5))
+                        plt.plot(exercise_data["Date"], exercise_data["Weight"],
+                                 marker='o', color=weight_color, label="Weight (kg)")
+                        plt.plot(exercise_data["Date"], exercise_data["Reps"],
+                                 marker='s', color=reps_color, label="Reps")
+
+                        # Format date labels
+                        plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter(date_format))
+                        plt.title(f"{exercise} Progress Over Time")
+                        plt.xlabel("Date")
+                        plt.ylabel("Weight / Reps")
+                        plt.legend()
+                        plt.grid(True)
+                        st.pyplot(plt)
+                else:
+                    st.warning("No data available for the selected exercises.")
+
 
             elif analysis_type == "Weight Summary":
                 # Calculate total weight lifted per month
@@ -285,9 +313,9 @@ elif menu_option == "View Progress":
 
                 # Plot total weight lifted
                 plt.figure(figsize=(10, 5))
-                plt.bar(weight_summary["Date"].dt.strftime("%B %Y"), weight_summary["TotalWeight"], color="skyblue")
+                plt.bar(weight_summary["Date"].dt.strftime("%m.%y"), weight_summary["TotalWeight"], color="hotpink")
                 plt.title("Total Weight Lifted Over Time")
-                plt.xlabel("Month")
+                plt.xlabel("Month.Year")
                 plt.ylabel("Total Weight Lifted (kg)")
                 plt.grid(axis="y")
                 st.pyplot(plt)
