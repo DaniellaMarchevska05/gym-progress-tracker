@@ -66,4 +66,4 @@ The app consists of three main sections accessible via the sidebar menu:
 - **Analyze Progress**:
   - Choose analysis type (Exercise Trends, Weight Summary).
   - Select analysis period (1 Month, 6 Months, 1 Year).
-  - View and plot the selected data.
+  - View and plot the selected data
